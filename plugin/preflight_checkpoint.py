@@ -7,19 +7,8 @@ silently rather than loudly:
   * `config.tiles` -- read via the SAME reader the server uses. Reading the
     wrong key (`cfg`) yields None, falls through to 0, and serves a TILED
     adapter with a 257-token layout. No error, just a layout never trained on.
-  * merge provenance + `worst_pairwise_cosine` -- replicas drift apart over
-    time; merge_adapters refuses below 0.3, but a merge can be legal and still
-    poor. Falling cosine is the early warning, so it is printed every time and
-    warned on below WARN_COSINE. Trend so far: +0.8062 (850) -> +0.6381 (1000).
-    **Cosine is the DECISION signal: it says whether the soup still lives in one
-    basin. Step spread is only bookkeeping.**
-
-Note this check is NOT redundant with the orchestrator's own guard, and both
-should be kept -- they measure different things:
-  * orchestrator: each replica vs THAT replica's own newest checkpoint; skips the
-    round above 300. Catches a replica that has STOPPED PUBLISHING.
-  * here: publication steps ACROSS replicas. Catches replicas DRIFTING APART.
-A fleet can pass one and fail the other in either direction.
+  * merge provenance + `worst_pairwise_cosine` -- multi-source merges can
+    drift; cosine is the decision signal, step spread is bookkeeping only.
   * shape/keys/param-count contract, and whether the file is actually DIFFERENT
     from what is being served (guards against "upgrading" to the same bytes).
 
@@ -33,7 +22,7 @@ import sys
 import torch
 
 WARN_COSINE = 0.5        # refusal floor is 0.3; warn well before it
-WARN_STEP_SPREAD = 300   # replicas publish async; flag only when far apart
+WARN_STEP_SPREAD = 300   # multi-source merges can lag; flag only when far apart
 EXPECT_KEYS = {"proj.0.weight", "proj.0.bias", "proj.2.weight",
                "proj.2.bias", "view_seperator"}
 EXPECT_PARAMS = 20_459_520
@@ -83,10 +72,7 @@ def report(path):
     if "merged_from" in ck:
         src = ck["merged_from"]
         print(f"  merged_from      : {src}")
-        # The merge is deliberately ASYNCHRONOUS -- replicas publish hundreds of
-        # steps apart and that is normal. What matters is HOW far apart, so parse
-        # the real per-replica steps and surface the spread. Handles both the new
-        # "r0@001000" form and the older "…/adapter-r0-000850.pt" paths.
+        # Parse source step ids when present (several naming schemes exist).
         steps = {}
         for entry in (src if isinstance(src, (list, tuple)) else [src]):
             s = str(entry)
@@ -97,38 +83,27 @@ def report(path):
         if steps:
             lo, hi = min(steps.values()), max(steps.values())
             spread = hi - lo
-            print(f"  replica steps    : {dict(sorted(steps.items()))}")
+            print(f"  source steps     : {dict(sorted(steps.items()))}")
             flag = "OK" if spread <= WARN_STEP_SPREAD else \
                 f"WIDE (> {WARN_STEP_SPREAD})"
             print(f"  step spread      : {spread} ({lo}..{hi})  {flag}")
             if spread > WARN_STEP_SPREAD:
-                print("    NOTE: wide spread is EXPECTED, not a defect. r1 runs ~13%")
-                print("    slower than the other replicas, so the gap grows")
-                print("    monotonically through normal operation (~210 at 0h,")
-                print("    ~282 at 4h, ~354 at 8h). Step-weighting the merge was")
-                print("    evaluated and rejected: it moves r1 0.2500 -> 0.2206, too")
-                print("    small to justify changing merge semantics mid-run.")
-                print("    ** Spread is bookkeeping. COSINE is the decision signal. **")
-                print("    Report it; do not treat it as breakage on its own.")
+                print("    NOTE: wide spread is common for async multi-source")
+                print("    merges. Cosine is the decision signal; spread alone")
+                print("    is not breakage.")
         elif src:
-            print("    NOTE: could not parse per-replica steps from merged_from;")
-            print("    if these are MAXSTEP-flattened names the provenance may")
-            print("    claim a lockstep merge that did not happen.")
+            print("    NOTE: could not parse source steps from merged_from.")
     if "merge_weights" in ck:
         print(f"  merge_weights    : {ck['merge_weights']}")
     cos = ck.get("worst_pairwise_cosine")
     if cos is None:
-        print("  worst cosine     : ABSENT (pre-303b447 orchestrator merge)")
+        print("  worst cosine     : ABSENT")
     else:
         flag = "OK" if cos >= WARN_COSINE else f"LOW (< {WARN_COSINE})"
         print(f"  worst cosine     : {cos:+.4f}  {flag}")
         if cos < WARN_COSINE:
-            print("    WARNING: replicas are diverging; a merge can clear the 0.3")
-            print("    refusal floor and still be a poor soup. Confirm before serving.")
+            print("    WARNING: sources look divergent; confirm before serving.")
 
-    # Reconstructed values are deliberately kept OUT of the real fields, so a
-    # log-derived cosine is never mistaken for one the merge computed. Surface
-    # the note or that context is lost.
     note = ck.get("provenance_note")
     if note:
         print(f"  provenance_note  : {note}")

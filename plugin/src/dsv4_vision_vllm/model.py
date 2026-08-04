@@ -13,8 +13,8 @@ SupportsMultiModal). When True, gpu_model_runner._prepare_mm_inputs passes BOTH
 `input_ids` and `inputs_embeds`, and DSV4's forward threads `input_ids` into every
 decoder layer independently of `inputs_embeds`. So the splice needs no core patch.
 
-Layout contract (dsv4-vision/SPEC.md + the eval bundle README)
---------------------------------------------------------------
+Layout contract
+---------------
     n_img_tokens = n_views * 256 + 1
     rows [0 : n_views*256] <- projector(tower(pixels))
     row  [n_views*256]     <- adapter.view_seperator, a LEARNED nn.Parameter(4096)
@@ -23,8 +23,8 @@ The separator row is NOT a feature. Filling all rows with features raises no err
 and still yields fluent text -- it just feeds a layout the model never saw.
 
 Ordering is GLOBAL view first, then tiles, then the separator (global_view_pos
-"head"). Today training runs tiles=0, so n_views == 1 and n_img_tokens == 257.
-That is configurable here and deliberately NOT hardcoded to a 5-view layout.
+"head"). Tile count comes from the checkpoint (`config.tiles`); it is not
+hardcoded to a fixed multi-view layout.
 """
 
 import os
@@ -63,7 +63,7 @@ from vllm.multimodal.processing import (
 )
 from vllm.sequence import IntermediateTensors
 
-# --- frozen interface constants (SPEC.md section 9) -------------------------
+# --- frozen interface constants ---------------------------------------------
 IMAGE_TOKEN_ID = 129279
 IMAGE_TOKEN_STR = "<｜image｜>"
 ENCODER_DIM = 896
@@ -82,9 +82,8 @@ _TILES_CACHE: list = []
 def checkpoint_tiles() -> int:
     """`tiles` the served checkpoint was TRAINED with, read from the checkpoint.
 
-    SPEC.md v0.2: read it, do not assume. v0.1 artefacts (merged-000800.pt and
-    tiles0-final-merged-000850.pt, the final tiles=0 checkpoint) carry tiles=0
-    and stay at a fixed 257 tokens per image.
+    Read `tiles` from the checkpoint config; do not hardcode. Older tiles=0
+    adapters stay at a fixed 257 tokens per image.
     """
     if _TILES_CACHE:
         return _TILES_CACHE[0]
@@ -103,8 +102,7 @@ def checkpoint_tiles() -> int:
             if meta is None:
                 meta = ck.get("cfg")
             if meta is None:
-                # Pre-2026-08-01 merges (merged-000800, tiles0-final-merged-000850)
-                # carry no config at all and are genuinely tiles=0.
+                # Older adapters may omit config entirely → treat as tiles=0.
                 print("[dsv4-vision] WARNING: no `config` in "
                       f"{ADAPTER_PATH}; assuming tiles=0 (257 tokens/image). "
                       "Set DSV4_VISION_TILES to override.", file=sys.stderr)
@@ -123,8 +121,8 @@ def checkpoint_tiles() -> int:
 
 def best_grid(w: int, h: int, max_tiles: int) -> tuple[int, int]:
     """cols/rows closest to the aspect ratio; ties go to MORE tiles.
-    Verbatim from SPEC.md v0.2 -- a square grid inherits the squeeze that a
-    square resize applies to 16:9, so the grid has to be aspect-aware."""
+    A square grid inherits the squeeze a square resize applies to 16:9, so the
+    grid has to be aspect-aware."""
     ar, best_key, best = w / h, None, (1, 1)
     for cols in range(1, max_tiles + 1):
         for rows in range(1, max_tiles + 1):
@@ -182,12 +180,8 @@ def preprocess_image(image) -> torch.Tensor:
 
 
 class Adapter(nn.Module):
-    """The trained projector. Structure must match dsv4-vision/model/tower.py:
-    Linear(896->4096) -> GELU -> Linear(4096->4096), plus view_seperator.
-
-    NOTE: deliberately NOT reusing the in-image OCR-2 MlpProjector *config* --
-    OCR-2 projects into its own smaller LM hidden size, so a config-level reuse
-    would either fail to load or silently load garbage.
+    """The trained projector: Linear(896->4096) -> GELU -> Linear(4096->4096),
+    plus a learned view_seperator parameter.
     """
 
     def __init__(self):
@@ -349,7 +343,7 @@ class DeepseekV4VisionForCausalLM(nn.Module, SupportsMultiModal, SupportsPP):
         """Frozen SAM+Qwen2 tower and the trained BF16 adapter.
 
         Both are plain torch.nn modules, so the backbone's fp8 quant_config never
-        touches them -- the adapter stays BF16 as SPEC.md section 6 requires.
+        touches them -- the adapter is kept BF16.
         """
         from dsv4_vision_vllm.deepencoderv2 import (
             build_qwen2_decoder_as_encoder,

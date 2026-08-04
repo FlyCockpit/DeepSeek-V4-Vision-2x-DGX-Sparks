@@ -1,11 +1,9 @@
 # Credits
 
-## Vision encoder (FlyCockpit)
+## Vision encoder
 
-- Final merged adapter + packaging:
+- Production tower + final adapter:
   [`FlyCockpit/DeepSeek-V4-Flash-0731-vision`](https://huggingface.co/FlyCockpit/DeepSeek-V4-Flash-0731-vision)
-- Training history:
-  [`FlyCockpit/dsv4-vision-training-checkpoints`](https://huggingface.co/FlyCockpit/dsv4-vision-training-checkpoints)
 
 ## Backbone
 
