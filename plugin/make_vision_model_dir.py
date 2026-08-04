@@ -7,8 +7,8 @@ The directory is created INSIDE the HF cache and its symlinks point at the
 two reasons:
   - the compose mounts HF_CACHE at /cache/huggingface, so the links resolve
     inside the container;
-  - the two nodes have different usernames (christopherkapic vs christopher),
-    so host-absolute links would not be portable between them.
+  - the two nodes may use different usernames/homes, so host-absolute links
+    would not be portable between them.
 
 Everything is symlinked, so this costs no disk and cannot corrupt the original.
 """

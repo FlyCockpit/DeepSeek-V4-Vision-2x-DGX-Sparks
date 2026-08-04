@@ -26,11 +26,10 @@ TOWER_MD5_EXPECT="${TOWER_MD5_EXPECT:-2d5dba626d816cc367d28b32e744830e}"
 export HF_HOME="${HF_HOME:-$HF_CACHE}"
 export HF_HUB_DISABLE_XET="${HF_HUB_DISABLE_XET:-1}"
 
-if [[ -n "${HF_TOKEN_FILE:-}" && -f "$HF_TOKEN_FILE" ]]; then
+# Optional auth for private HF assets (public release does not need a token).
+# Prefer: export HF_TOKEN=...  or  HF_TOKEN_FILE=/path/to/token
+if [[ -z "${HF_TOKEN:-}" && -n "${HF_TOKEN_FILE:-}" && -f "$HF_TOKEN_FILE" ]]; then
   HF_TOKEN="$(tr -d '\r\n' < "$HF_TOKEN_FILE")"
-  export HF_TOKEN
-elif [[ -f "$HOME/.config/flycockpit/hf_token" ]]; then
-  HF_TOKEN="$(tr -d '\r\n' < "$HOME/.config/flycockpit/hf_token")"
   export HF_TOKEN
 fi
 

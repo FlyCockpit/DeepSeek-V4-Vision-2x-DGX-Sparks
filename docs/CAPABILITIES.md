@@ -1,8 +1,10 @@
-# Capabilities of the final encoder (step 4800)
+# Capabilities
 
-Measured on the live 2× Spark server serving
-`merged-004800-5af0c5.pt` (md5 `d9b3b3bda8f790ecf7cd5a98e6fb93a5`) with
-`deepseek-ai/DeepSeek-V4-Flash-0731` FP8.
+Honest results for the production encoder (**step 4800**,
+`merged-004800-5af0c5.pt`, md5 `d9b3b3bda8f790ecf7cd5a98e6fb93a5`) served with
+`deepseek-ai/DeepSeek-V4-Flash-0731` FP8 on 2× DGX Spark.
+
+**TL;DR:** great at *understanding* screenshots; not a finished click-agent.
 
 ## Layout
 

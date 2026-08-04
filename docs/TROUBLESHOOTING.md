@@ -33,11 +33,10 @@ export PATH="$HOME/.local/bin:$PATH"
 
 `scripts/download-assets.sh` tries common locations.
 
-## NetBird port 22 vs real OpenSSH
+## Overlay SSH vs real OpenSSH
 
-On some Spark fleets, port 22 is a NetBird wrapper (`su -` around commands) with
-no SFTP — `scp` fails and `nohup` is unreliable. Prefer a real OpenSSH listener
-(e.g. port 2222) for automation.
+Some mesh/VPN SSH frontends wrap every command in `su -` and omit SFTP — `scp`
+fails and `nohup` is unreliable. Prefer a real OpenSSH listener for automation.
 
 ## NCCL hang at bootstrap
 

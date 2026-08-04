@@ -5,7 +5,7 @@
 | plane | purpose | example |
 |---|---|---|
 | RoCE fabric | NCCL TP all-reduces + vLLM rendezvous | `192.168.100.0/24` on `enp1s0f1np1` |
-| Management / SSH | deploy scripts, scp | NetBird or LAN; prefer real OpenSSH |
+| Management / SSH | deploy scripts, scp | LAN / VPN; prefer real OpenSSH (not a restricted overlay SSH) |
 | API | clients hit head `:8899` | host network |
 
 `MASTER_ADDR` and `VLLM_HOST_IP` must be **fabric** addresses, not the
@@ -49,6 +49,6 @@ SSH if OpenSSH is not listening there.
 
 ## Durability
 
-wsmp / reverse proxies (if you use them) can be systemd user services. The
-vLLM compose stack in this recipe is **not** — it will not return after reboot
-until you re-run `start-vision.sh` (or add your own unit).
+Any reverse proxy in front of `:8899` is optional and outside this recipe.
+The vLLM compose stack is **not** systemd-managed by default — it will not
+return after reboot until you re-run `start-vision.sh` (or add your own unit).
