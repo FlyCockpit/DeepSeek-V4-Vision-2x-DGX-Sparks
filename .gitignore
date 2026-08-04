@@ -1,0 +1,8 @@
+.env.vision
+.env.vision.runtime
+.env.vision.active
+*.pt
+*.safetensors
+__pycache__/
+*.pyc
+.DS_Store

@@ -1,0 +1,16 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "dsv4-vision-vllm"
+version = "0.1.0"
+description = "DSV4-Flash-0731 vision adapter as a vLLM plugin (no core patch)"
+requires-python = ">=3.10"
+
+# vLLM calls this at engine startup, in every worker process.
+[project.entry-points."vllm.general_plugins"]
+dsv4_vision = "dsv4_vision_vllm:register"
+
+[tool.setuptools.packages.find]
+where = ["src"]
