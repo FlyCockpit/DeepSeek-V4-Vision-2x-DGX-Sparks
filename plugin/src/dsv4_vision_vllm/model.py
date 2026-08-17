@@ -39,6 +39,7 @@ from vllm.config import VllmConfig
 from vllm.config.multimodal import BaseDummyOptions
 from vllm.inputs import MultiModalDataDict
 from vllm.model_executor.models.interfaces import (
+    SupportsEagle3,
     MultiModalEmbeddings,
     SupportsMultiModal,
     SupportsPP,
@@ -304,9 +305,30 @@ class DSV4VisionMultiModalProcessor(
     info=DSV4VisionProcessingInfo,
     dummy_inputs=DSV4VisionDummyInputsBuilder,
 )
-class DeepseekV4VisionForCausalLM(nn.Module, SupportsMultiModal, SupportsPP):
+class DeepseekV4VisionForCausalLM(nn.Module, SupportsMultiModal, SupportsPP, SupportsEagle3):
     # THE CRUX: keep input_ids alongside inputs_embeds so the HashRouter works.
     requires_raw_input_tokens = True
+
+    # DSpark (and eagle3/dflash) drafting asks the target model for auxiliary
+    # hidden states. gpu/model_runner.py sets use_aux_hidden_state_outputs for
+    # method in ("eagle3", "dflash", "dspark") and then calls
+    # set_eagle3_aux_hidden_state_layers(), which rejects any model failing
+    # supports_eagle3(). The backbone satisfies it through
+    # DeepseekV2ForCausalLM; this wrapper has to forward it like the other
+    # language-model hooks below.
+    supports_eagle3 = True
+
+    def set_aux_hidden_state_layers(self, layers: tuple[int, ...]) -> None:
+        self.language_model.set_aux_hidden_state_layers(layers)
+
+    def get_eagle3_aux_hidden_state_layers(self) -> tuple[int, ...]:
+        return self.language_model.get_eagle3_aux_hidden_state_layers()
+
+    def get_eagle3_default_aux_hidden_state_layers(self) -> tuple[int, ...]:
+        inner = self.language_model
+        fn = getattr(inner, "get_eagle3_default_aux_hidden_state_layers", None)
+        return (fn or inner.get_eagle3_aux_hidden_state_layers)()
+
 
     @classmethod
     def get_placeholder_str(cls, modality: str, i: int) -> str | None:
